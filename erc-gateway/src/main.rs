@@ -25,6 +25,9 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    // 初始化结构化日志
+    tracing_subscriber::fmt::init();
+
     let config = GatewayConfig::from_env();
 
     let recorder = Arc::new(Recorder::new(
@@ -43,7 +46,7 @@ async fn main() {
         .route("/health", axum::routing::get(health_handler))
         .with_state(state);
 
-    println!("🚀 ERC Gateway listening on {}", config.listen_addr);
+    tracing::info!("🚀 ERC Gateway listening on {}", config.listen_addr);
     let listener = tokio::net::TcpListener::bind(&config.listen_addr)
         .await
         .unwrap();
@@ -58,11 +61,10 @@ async fn proxy_handler(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, StatusCode> {
-    // 从请求头中获取 API key
     let api_key = std::env::var("ANTHROPIC_API_KEY")
         .unwrap_or_default();
 
-    // 转发到上游
+    // 转发请求到上游
     let response = forward_to_upstream(
         &state.client,
         &state.config.upstream_url,
@@ -71,13 +73,13 @@ async fn proxy_handler(
     )
     .await
     .map_err(|e| {
-        eprintln!("代理错误: {}", e);
+        tracing::error!("Proxy error: {}", e);
         StatusCode::BAD_GATEWAY
     })?;
 
-    // 记录执行
+    // 记录执行并生成回执
     let receipt = state.recorder.record_execution(&body, &response);
-    println!("✅ 回执已生成: {}", receipt.receipt_id);
+    tracing::info!("✅ Receipt generated: {}", receipt.receipt_id);
 
     Ok(Json(response))
 }
