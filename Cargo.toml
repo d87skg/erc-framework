@@ -3,6 +3,6 @@ resolver = "2"
 members = [
     "erc-core",
     "erc-gateway",
-    # "erc-store",
-    # "erc-query-api",
+    "erc-store",
+    "erc-query-api",
 ]
