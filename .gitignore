@@ -1,0 +1,35 @@
+# Rust
+/target
+**/target
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.maturin/
+
+# Data
+*.db
+erc_buffer.db
+
+# Secrets
+*.pem
+*.key
+/run/secrets/*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
