@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ercprotocol.io/schemas/err-v1.schema.json",
+  "title": "Execution Responsibility Record v1.0.0",
+  "description": "冻结后永不删除已定义字段，新增字段必须放入 extensions",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "receipt_id",
+    "execution_id",
+    "trace_id",
+    "schema_version",
+    "actor",
+    "agent",
+    "model",
+    "action",
+    "security",
+    "proof",
+    "custody",
+    "policy",
+    "extensions"
+  ],
+  "properties": {
+    "receipt_id": { "type": "string", "format": "uuid" },
+    "execution_id": { "type": "string" },
+    "trace_id": { "type": "string" },
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "actor": {
+      "type": "object",
+      "required": ["actor_type", "id"],
+      "properties": {
+        "actor_type": { "type": "string", "enum": ["human", "agent", "system"] },
+        "id": { "type": "string" },
+        "delegated_by": { "type": "string" },
+        "session_id": { "type": "string" }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "required": ["id", "agent_type"],
+      "properties": {
+        "id": { "type": "string" },
+        "agent_type": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "public_key": { "type": "string" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["provider", "name", "version"],
+      "properties": {
+        "provider": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "parameters": { "type": "object" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["kind", "prompt", "response"],
+      "properties": {
+        "kind": { "type": "string" },
+        "prompt": { "type": "string" },
+        "response": { "type": "string" },
+        "tools_called": { "type": "array", "items": { "type": "string" } },
+        "decision": { "type": "string" }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["nonce", "signatures"],
+      "properties": {
+        "nonce": { "type": "integer", "minimum": 0 },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["signer", "algorithm", "signature"],
+            "properties": {
+              "signer": { "type": "string" },
+              "algorithm": { "type": "string" },
+              "signature": { "type": "string" }
+            }
+          }
+        },
+        "tee_attestation": { "type": "string" },
+        "timestamp_proof": { "type": "string" }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "required": ["merkle_root", "celestia_namespace"],
+      "properties": {
+        "merkle_root": { "type": "string" },
+        "celestia_height": { "type": "integer" },
+        "celestia_namespace": { "type": "string" },
+        "celestia_tx_hash": { "type": "string" }
+      }
+    },
+    "custody": {
+      "type": "object",
+      "properties": {
+        "previous_receipt_hash": { "type": "string" },
+        "derived_from": { "type": "string" },
+        "transferred_to": { "type": "string" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "risk_level": { "type": "string" },
+        "approvals_required": { "type": "integer" },
+        "compliance_tags": { "type": "array", "items": { "type": "string" } },
+        "jurisdiction": { "type": "string" }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "所有未来新增字段必须放在此处，已有字段永不删除"
+    }
+  }
+}
