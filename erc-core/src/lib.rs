@@ -3,8 +3,8 @@ use ed25519_dalek::SigningKey;
 use sha2::Sha256;
 use sha2::Digest;
 
-mod receipt;
-mod event;
+pub mod receipt;
+pub mod event;
 mod crypto;
 mod merkle;
 
