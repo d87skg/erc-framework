@@ -1,5 +1,5 @@
-/// Gateway 配置
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct GatewayConfig {
     pub listen_addr: String,
     pub upstream_url: String,
@@ -13,7 +13,7 @@ impl GatewayConfig {
             listen_addr: std::env::var("GATEWAY_LISTEN")
                 .unwrap_or("0.0.0.0:8080".into()),
             upstream_url: std::env::var("UPSTREAM_URL")
-                .unwrap_or("https://api.anthropic.com/v1/messages".into()),
+                .unwrap_or("https://api.deepseek.com/anthropic/v1/messages".into()),
             agent_id: std::env::var("ERC_AGENT_ID")
                 .unwrap_or("gateway-001".into()),
             public_key: std::env::var("ERC_PUBLIC_KEY")

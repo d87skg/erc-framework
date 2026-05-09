@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERC Trace Viewer</title>
+<style>
+  body { font-family: system-ui; max-width: 900px; margin: 50px auto; padding: 20px; }
+  .timeline { border-left: 3px solid #2563eb; padding-left: 20px; }
+  .event { margin: 15px 0; padding: 10px; background: #f8fafc; border-radius: 8px; }
+  .event-type { font-weight: bold; color: #2563eb; }
+  .event-time { color: #64748b; font-size: 0.9em; }
+  .event-detail { margin-top: 5px; color: #334155; }
+  input { padding: 10px; width: 350px; border: 1px solid #cbd5e1; border-radius: 6px; }
+  button { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
+  .error { color: #dc2626; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h1>🔍 ERC Trace Viewer</h1>
+<p>输入 trace_id，查看 AI 执行的完整责任时间线。</p>
+<input id="traceId" placeholder="输入 trace_id" />
+<button onclick="loadTrace()">查询</button>
+<div id="error" class="error"></div>
+<div id="timeline" class="timeline"></div>
+
+<script>
+async function loadTrace() {
+  const traceId = document.getElementById('traceId').value.trim();
+  document.getElementById('error').textContent = '';
+  document.getElementById('timeline').innerHTML = '';
+
+  if (!traceId) { document.getElementById('error').textContent = '请输入 trace_id'; return; }
+
+  try {
+    const url = `http://127.0.0.1:8082/api/v1/traces/causality?id=${traceId}&token=test-token-123`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('查询失败: ' + res.status);
+    const events = await res.json();
+
+    const timeline = document.getElementById('timeline');
+    events.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'event';
+      const time = e.timestamp ? new Date(e.timestamp * 1000).toLocaleTimeString() : 'N/A';
+      div.innerHTML = `
+        <div class="event-type">${e.type}</div>
+        <div class="event-time">${time}</div>
+        <div class="event-detail">execution_id: ${e.execution_id || 'N/A'}</div>
+      `;
+      timeline.appendChild(div);
+    });
+
+    if (events.length === 0) {
+      document.getElementById('timeline').innerHTML = '<p>未找到事件</p>';
+    }
+  } catch (err) {
+    document.getElementById('error').textContent = err.message;
+  }
+}
+</script>
+</body>
+</html>
