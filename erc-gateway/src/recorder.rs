@@ -17,7 +17,10 @@ pub struct Recorder {
 impl Recorder {
     pub fn new(db_path: &str, agent_id: &str) -> Self {
         let conn = Connection::open(db_path)
-            .expect("无法打开 SQLite 数据库");
+            .unwrap_or_else(|e| {
+                tracing::error!("无法打开 SQLite 数据库 {}: {}", db_path, e);
+                std::process::exit(1);
+            });
 
         conn.execute_batch("
             CREATE TABLE IF NOT EXISTS events (
@@ -34,8 +37,15 @@ impl Recorder {
                 payload TEXT NOT NULL,
                 timestamp INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS nonces (
+                agent_id TEXT PRIMARY KEY,
+                nonce INTEGER NOT NULL DEFAULT 0
+            );
         ")
-        .expect("无法创建数据库表");
+        .unwrap_or_else(|e| {
+            tracing::error!("无法创建数据库表: {}", e);
+            std::process::exit(1);
+        });
 
         Self {
             db: Mutex::new(conn),
@@ -88,7 +98,10 @@ impl Recorder {
 
         // 写入 events 表
         {
-            let db = self.db.lock().unwrap();
+            let db = self.db.lock().unwrap_or_else(|e| {
+                tracing::error!("数据库锁被污染: {}", e);
+                std::process::exit(1);
+            });
             db.execute(
                 "INSERT INTO events (execution_id, trace_id, event_type, payload, timestamp)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -96,7 +109,10 @@ impl Recorder {
                     execution_id,
                     trace_id,
                     "execution.started",
-                    serde_json::to_string(&started_event).unwrap(),
+                    serde_json::to_string(&started_event).unwrap_or_else(|e| {
+                        tracing::error!("序列化started_event失败: {}", e);
+                        String::from("{}")
+                    }),
                     timestamp,
                 ],
             )
@@ -108,7 +124,10 @@ impl Recorder {
                     execution_id,
                     trace_id,
                     "llm.call.completed",
-                    serde_json::to_string(&completed_event).unwrap(),
+                    serde_json::to_string(&completed_event).unwrap_or_else(|e| {
+                        tracing::error!("序列化completed_event失败: {}", e);
+                        String::from("{}")
+                    }),
                     timestamp,
                 ],
             )
@@ -147,6 +166,25 @@ impl Recorder {
             transferred_to: None,
         };
 
+        // 获取原子递增的nonce
+        let nonce: u64 = {
+            let db = self.db.lock().unwrap_or_else(|e| {
+                tracing::error!("数据库锁被污染: {}", e);
+                std::process::exit(1);
+            });
+            db.query_row(
+                "INSERT INTO nonces (agent_id, nonce)
+                 VALUES (?1, 1)
+                 ON CONFLICT(agent_id) DO UPDATE SET nonce = nonce + 1
+                 RETURNING nonce",
+                [&self.agent_id],
+                |row| row.get(0),
+            ).unwrap_or_else(|e| {
+                tracing::error!("获取nonce失败: {}", e);
+                0
+            })
+        };
+
         let receipt = ExecutionReceipt::new(
             &execution_id,
             &trace_id,
@@ -154,20 +192,27 @@ impl Recorder {
             agent,
             model,
             action,
-            0,
+            nonce,
             custody,
         );
 
         // 写入 receipts 表
         {
-            let db = self.db.lock().unwrap();
+            let db = self.db.lock().unwrap_or_else(|e| {
+                tracing::error!("数据库锁被污染: {}", e);
+                std::process::exit(1);
+            });
+            let receipt_json = receipt.to_json().unwrap_or_else(|e| {
+                tracing::error!("序列化receipt失败: {}", e);
+                String::from("{}")
+            });
             db.execute(
                 "INSERT INTO receipts (receipt_id, execution_id, payload, timestamp)
                  VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![
                     receipt.receipt_id,
                     execution_id,
-                    receipt.to_json(),
+                    receipt_json,
                     timestamp,
                 ],
             )

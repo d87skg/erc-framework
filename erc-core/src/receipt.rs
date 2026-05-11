@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
+use bincode::Options;
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -137,11 +138,21 @@ impl ExecutionReceipt {
         }
     }
 
-    pub fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap()
+    pub fn to_json(&self) -> Result<String, String> {
+        serde_json::to_string(self).map_err(|e| {
+            tracing::error!("JSON序列化失败: {}", e);
+            format!("JSON序列化失败: {}", e)
+        })
     }
 
-    pub fn to_canonical_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("Bincode serialization failed")
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, String> {
+        bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .with_little_endian()
+            .serialize(self)
+            .map_err(|e| {
+                tracing::error!("Bincode序列化失败: {}", e);
+                format!("Bincode序列化失败: {}", e)
+            })
     }
 }

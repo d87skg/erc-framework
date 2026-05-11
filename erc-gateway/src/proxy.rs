@@ -1,5 +1,35 @@
 use reqwest::Client;
 use serde_json::Value;
+use jsonschema::JSONSchema;
+
+/// 上游响应JSON Schema验证
+const UPSTREAM_RESPONSE_SCHEMA: &str = r#"{
+    "type": "object",
+    "properties": {
+        "id": {"type": "string"},
+        "type": {"type": "string"},
+        "role": {"type": "string"},
+        "content": {"type": "array"},
+        "model": {"type": "string"},
+        "stop_reason": {"type": ["string", "null"]},
+        "usage": {"type": "object"}
+    },
+    "additionalProperties": true
+}"#;
+
+/// 验证上游响应的JSON结构
+fn validate_response_schema(body: &Value) -> Result<(), String> {
+    let schema: Value = serde_json::from_str(UPSTREAM_RESPONSE_SCHEMA)
+        .map_err(|e| format!("Schema解析失败: {}", e))?;
+    
+    let compiled = JSONSchema::compile(&schema)
+        .map_err(|e| format!("Schema编译失败: {}", e))?;
+    
+    compiled.validate(body).map_err(|errors| {
+        let error_msgs: Vec<String> = errors.map(|e| e.to_string()).collect();
+        format!("响应Schema验证失败: {}", error_msgs.join("; "))
+    })
+}
 
 /// 透明转发请求到上游 API，增强了解析逻辑和错误处理
 pub async fn forward_to_upstream(
@@ -58,6 +88,9 @@ pub async fn forward_to_upstream(
                 e, preview
             )
         })?;
+
+    // 验证响应Schema
+    validate_response_schema(&response_body)?;
 
     Ok(response_body)
 }

@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERC 极简部署向导</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0 30px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #e0e0e0;
+            z-index: 0;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            height: 3px;
+            background: #2563eb;
+            z-index: 1;
+            transition: width 0.4s ease;
+        }
+
+        .progress-bar[data-step="1"]::after { width: 0%; }
+        .progress-bar[data-step="2"]::after { width: 33.33%; }
+        .progress-bar[data-step="3"]::after { width: 66.66%; }
+        .progress-bar[data-step="4"]::after { width: 100%; }
+
+        .step-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            color: #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .step-indicator.active .step-number {
+            background: #2563eb;
+            color: white;
+        }
+
+        .step-indicator.completed .step-number {
+            background: #10b981;
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.85rem;
+            color: #999;
+            text-align: center;
+        }
+
+        .step-indicator.active .step-label,
+        .step-indicator.completed .step-label {
+            color: #333;
+            font-weight: 500;
+        }
+
+        /* Step Content */
+        .step-content {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        .step-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .step-title {
+            font-size: 1.4rem;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+        }
+
+        .step-desc {
+            color: #666;
+            margin-bottom: 24px;
+        }
+
+        /* Provider Cards */
+        .provider-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .provider-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .provider-card:hover {
+            border-color: #93c5fd;
+            background: #f8fafc;
+        }
+
+        .provider-card.selected {
+            border-color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .provider-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .provider-name {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+
+        .provider-url {
+            font-size: 0.8rem;
+            color: #999;
+            word-break: break-all;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #374151;
+        }
+
+        .form-group label .required {
+            color: #ef4444;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-group input.error {
+            border-color: #ef4444;
+        }
+
+        .form-hint {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        .input-with-btn {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-with-btn input {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            padding: 10px 16px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        /* Summary Card */
+        .summary-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            color: #64748b;
+        }
+
+        .summary-value {
+            font-weight: 500;
+            color: #1e293b;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            color: #666;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: #2563eb;
+        }
+
+        .tab.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            position: relative;
+            margin-bottom: 16px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 6px;
+            color: #e2e8f0;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .copy-btn.copied {
+            background: #10b981;
+        }
+
+        .next-hint {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 14px;
+            margin-top: 16px;
+            font-size: 0.9rem;
+            color: #1e40af;
+        }
+
+        .next-hint strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-primary:disabled {
+            background: #93c5fd;
+            cursor: not-allowed;
+        }
+
+        .btn-outline {
+            background: white;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-outline:hover {
+            background: #f9fafb;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        /* Download Section */
+        .download-section {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .download-btn {
+            flex: 1;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .download-btn:hover {
+            background: #eff6ff;
+            border-color: #2563eb;
+        }
+
+        .download-btn .icon {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+
+        .download-btn .label {
+            font-size: 0.9rem;
+            color: #374151;
+        }
+
+        /* Validation */
+        .validation-msg {
+            font-size: 0.85rem;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .validation-msg.error {
+            color: #ef4444;
+            display: block;
+        }
+
+        .validation-msg.success {
+            color: #10b981;
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container {
+                padding: 12px;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .provider-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .step-content {
+                padding: 20px;
+            }
+
+            .btn-group {
+                flex-direction: column-reverse;
+                gap: 10px;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .step-label {
+                font-size: 0.75rem;
+            }
+
+            .download-section {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ ERC 极简部署向导</h1>
+            <p>三分钟，给你的 AI 应用加上不可篡改的审计轨迹</p>
+        </header>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar" data-step="1">
+            <div class="step-indicator active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">选择模型</div>
+            </div>
+            <div class="step-indicator" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">填写配置</div>
+            </div>
+            <div class="step-indicator" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">确认生成</div>
+            </div>
+            <div class="step-indicator" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-label">获取命令</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Choose Provider -->
+        <div class="step-content active" data-step="1">
+            <h2 class="step-title">选择 AI 模型提供商</h2>
+            <p class="step-desc">选择你正在使用的 AI 服务，我们会自动填入默认配置</p>
+
+            <div class="provider-grid">
+                <div class="provider-card" data-provider="deepseek" data-url="https://api.deepseek.com/anthropic/v1/messages" data-host="api.deepseek.com">
+                    <div class="provider-icon">🔮</div>
+                    <div class="provider-name">DeepSeek</div>
+                    <div class="provider-url">api.deepseek.com</div>
+                </div>
+                <div class="provider-card" data-provider="openai" data-url="https://api.openai.com/v1/chat/completions" data-host="api.openai.com">
+                    <div class="provider-icon">🤖</div>
+                    <div class="provider-name">OpenAI</div>
+                    <div class="provider-url">api.openai.com</div>
+                </div>
+                <div class="provider-card" data-provider="gemini" data-url="https://generativelanguage.googleapis.com/v1beta/models" data-host="generativelanguage.googleapis.com">
+                    <div class="provider-icon">✨</div>
+                    <div class="provider-name">Gemini</div>
+                    <div class="provider-url">generativelanguage.googleapis.com</div>
+                </div>
+                <div class="provider-card" data-provider="custom" data-url="" data-host="">
+                    <div class="provider-icon">⚙️</div>
+                    <div class="provider-name">自定义</div>
+                    <div class="provider-url">手动输入地址</div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <div></div>
+                <button class="btn btn-primary" id="step1-next" disabled>下一步 →</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Fill Config -->
+        <div class="step-content" data-step="2">
+            <h2 class="step-title">填写配置信息</h2>
+            <p class="step-desc">配置你的 API 密钥和审计参数</p>
+
+            <div class="form-group" id="custom-url-group" style="display:none;">
+                <label>上游 API 地址 <span class="required">*</span></label>
+                <input type="text" id="upstream-url" placeholder="https://your-api.com/v1/chat">
+                <div class="form-hint">你的 AI 模型的 API 端点地址</div>
+                <div class="validation-msg" id="url-validation"></div>
+            </div>
+
+            <div class="form-group">
+                <label>你的 AI API Key <span class="required">*</span></label>
+                <input type="password" id="api-key" placeholder="sk-xxxxxxxxxxxxxxxx">
+                <div class="form-hint">从你的 AI 服务商获取的 API 密钥</div>
+                <div class="validation-msg" id="key-validation"></div>
+            </div>
+
+            <div class="form-group">
+                <label>设置一个审计 Token <span class="required">*</span></label>
+                <div class="input-with-btn">
+                    <input type="text" id="api-token" placeholder="your-secure-token">
+                    <button class="btn-secondary" id="generate-token">随机生成</button>
+                </div>
+                <div class="form-hint">用于访问审计查询 API 的认证令牌</div>
+                <div class="validation-msg" id="token-validation"></div>
+            </div>
+
+            <div class="form-group">
+                <label>允许的上游域名</label>
+                <input type="text" id="allowed-hosts" placeholder="api.deepseek.com">
+                <div class="form-hint">逗号分隔多个域名，用于安全验证</div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-outline" id="step2-back">← 上一步</button>
+                <button class="btn btn-primary" id="step2-next" disabled>下一步 →</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Confirm & Generate -->
+        <div class="step-content" data-step="3">
+            <h2 class="step-title">确认配置</h2>
+            <p class="step-desc">检查以下配置信息，确认无误后生成部署命令</p>
+
+            <div class="summary-card">
+                <div class="summary-item">
+                    <span class="summary-label">AI 模型</span>
+                    <span class="summary-value" id="summary-provider">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">审计 Token</span>
+                    <span class="summary-value" id="summary-token">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">数据存储</span>
+                    <span class="summary-value">本地 ./data 目录</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Gateway 端口</span>
+                    <span class="summary-value">8080</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Query API 端口</span>
+                    <span class="summary-value">8082</span>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-outline" id="step3-back">← 上一步</button>
+                <button class="btn btn-success" id="step3-generate">🚀 生成命令</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Get Commands -->
+        <div class="step-content" data-step="4">
+            <h2 class="step-title">部署命令已生成</h2>
+            <p class="step-desc">选择你喜欢的方式部署 ERC</p>
+
+            <div class="tabs">
+                <div class="tab active" data-tab="docker">Docker 命令</div>
+                <div class="tab" data-tab="compose">Docker Compose</div>
+            </div>
+
+            <!-- Docker Tab -->
+            <div class="tab-content active" data-tab="docker">
+                <div class="code-block" id="docker-command">
+                    <button class="copy-btn" data-target="docker-command">复制</button>
+                </div>
+                <div class="next-hint">
+                    <strong>📌 下一步</strong>
+                    在终端中执行上述命令，然后访问 <code>http://localhost:8080/health</code> 验证服务状态。
+                </div>
+            </div>
+
+            <!-- Compose Tab -->
+            <div class="tab-content" data-tab="compose">
+                <div class="download-section">
+                    <div class="download-btn" id="download-env">
+                        <div class="icon">📄</div>
+                        <div class="label">下载 .env 文件</div>
+                    </div>
+                    <div class="download-btn" id="download-compose">
+                        <div class="icon">📄</div>
+                        <div class="label">下载 docker-compose.yml</div>
+                    </div>
+                </div>
+
+                <div class="code-block" id="compose-command">
+                    <button class="copy-btn" data-target="compose-command">复制</button>
+                </div>
+                <div class="next-hint">
+                    <strong>📌 下一步</strong>
+                    1. 将下载的文件放到同一目录<br>
+                    2. 执行 <code>docker compose up -d</code><br>
+                    3. 访问 <code>http://localhost:8080/health</code> 验证
+                </div>
+            </div>
+
+            <div style="margin-top: 24px; padding: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                <strong style="color: #166534;">🔍 查看审计轨迹</strong>
+                <p style="color: #166534; font-size: 0.9rem; margin-top: 4px;">
+                    服务启动后，访问 <code>http://localhost:8082/trace-viewer.html</code> 即可查看 AI 请求的完整审计时间线。
+                </p>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-outline" id="step4-back">← 重新配置</button>
+                <button class="btn btn-primary" id="step4-restart">🔄 重新开始</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentStep = 1;
+        let config = {
+            provider: '',
+            upstreamUrl: '',
+            apiKey: '',
+            apiToken: '',
+            allowedHosts: ''
+        };
+
+        // Elements
+        const progressBar = document.querySelector('.progress-bar');
+        const stepIndicators = document.querySelectorAll('.step-indicator');
+        const stepContents = document.querySelectorAll('.step-content');
+
+        // Provider Cards
+        const providerCards = document.querySelectorAll('.provider-card');
+        providerCards.forEach(card => {
+            card.addEventListener('click', () => {
+                providerCards.forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                config.provider = card.dataset.provider;
+                config.upstreamUrl = card.dataset.url;
+                config.allowedHosts = card.dataset.host;
+
+                const customUrlGroup = document.getElementById('custom-url-group');
+                if (config.provider === 'custom') {
+                    customUrlGroup.style.display = 'block';
+                    document.getElementById('upstream-url').value = '';
+                    document.getElementById('allowed-hosts').value = '';
+                } else {
+                    customUrlGroup.style.display = 'none';
+                    document.getElementById('upstream-url').value = config.upstreamUrl;
+                    document.getElementById('allowed-hosts').value = config.allowedHosts;
+                }
+
+                document.getElementById('step1-next').disabled = false;
+            });
+        });
+
+        // Generate Token
+        document.getElementById('generate-token').addEventListener('click', () => {
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let token = 'erc-';
+            for (let i = 0; i < 8; i++) {
+                token += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('api-token').value = token;
+            validateStep2();
+        });
+
+        // Input Validation
+        function validateStep2() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            const apiToken = document.getElementById('api-token').value.trim();
+            const upstreamUrl = document.getElementById('upstream-url').value.trim();
+
+            let valid = true;
+
+            // Validate API Key
+            const keyValidation = document.getElementById('key-validation');
+            if (!apiKey) {
+                keyValidation.className = 'validation-msg error';
+                keyValidation.textContent = '请输入 API Key';
+                document.getElementById('api-key').classList.add('error');
+                valid = false;
+            } else {
+                keyValidation.className = 'validation-msg success';
+                keyValidation.textContent = '✓ 已填写';
+                document.getElementById('api-key').classList.remove('error');
+            }
+
+            // Validate Token
+            const tokenValidation = document.getElementById('token-validation');
+            if (!apiToken) {
+                tokenValidation.className = 'validation-msg error';
+                tokenValidation.textContent = '请设置审计 Token';
+                document.getElementById('api-token').classList.add('error');
+                valid = false;
+            } else if (apiToken.length < 6) {
+                tokenValidation.className = 'validation-msg error';
+                tokenValidation.textContent = 'Token 长度至少 6 位';
+                document.getElementById('api-token').classList.add('error');
+                valid = false;
+            } else {
+                tokenValidation.className = 'validation-msg success';
+                tokenValidation.textContent = '✓ 强度足够';
+                document.getElementById('api-token').classList.remove('error');
+            }
+
+            // Validate URL if custom
+            if (config.provider === 'custom') {
+                const urlValidation = document.getElementById('url-validation');
+                if (!upstreamUrl) {
+                    urlValidation.className = 'validation-msg error';
+                    urlValidation.textContent = '请输入上游 API 地址';
+                    document.getElementById('upstream-url').classList.add('error');
+                    valid = false;
+                } else if (!upstreamUrl.startsWith('http')) {
+                    urlValidation.className = 'validation-msg error';
+                    urlValidation.textContent = '地址必须以 http:// 或 https:// 开头';
+                    document.getElementById('upstream-url').classList.add('error');
+                    valid = false;
+                } else {
+                    urlValidation.className = 'validation-msg success';
+                    urlValidation.textContent = '✓ 格式正确';
+                    document.getElementById('upstream-url').classList.remove('error');
+                }
+            }
+
+            document.getElementById('step2-next').disabled = !valid;
+            return valid;
+        }
+
+        // Listen to input changes
+        ['api-key', 'api-token', 'upstream-url'].forEach(id => {
+            document.getElementById(id).addEventListener('input', validateStep2);
+        });
+
+        // Navigation
+        function goToStep(step) {
+            currentStep = step;
+            progressBar.dataset.step = step;
+
+            stepIndicators.forEach(ind => {
+                const s = parseInt(ind.dataset.step);
+                ind.classList.remove('active', 'completed');
+                if (s === step) ind.classList.add('active');
+                else if (s < step) ind.classList.add('completed');
+            });
+
+            stepContents.forEach(content => {
+                content.classList.remove('active');
+                if (parseInt(content.dataset.step) === step) {
+                    content.classList.add('active');
+                }
+            });
+        }
+
+        // Step 1 Next
+        document.getElementById('step1-next').addEventListener('click', () => {
+            goToStep(2);
+        });
+
+        // Step 2 Back/Next
+        document.getElementById('step2-back').addEventListener('click', () => goToStep(1));
+        document.getElementById('step2-next').addEventListener('click', () => {
+            config.apiKey = document.getElementById('api-key').value.trim();
+            config.apiToken = document.getElementById('api-token').value.trim();
+            config.allowedHosts = document.getElementById('allowed-hosts').value.trim() || config.allowedHosts;
+            if (config.provider === 'custom') {
+                config.upstreamUrl = document.getElementById('upstream-url').value.trim();
+            }
+
+            // Update summary
+            const providerNames = { deepseek: 'DeepSeek', openai: 'OpenAI', gemini: 'Gemini', custom: '自定义' };
+            document.getElementById('summary-provider').textContent = providerNames[config.provider] || config.provider;
+            document.getElementById('summary-token').textContent = config.apiToken;
+
+            goToStep(3);
+        });
+
+        // Step 3 Back/Generate
+        document.getElementById('step3-back').addEventListener('click', () => goToStep(2));
+        document.getElementById('step3-generate').addEventListener('click', () => {
+            generateCommands();
+            goToStep(4);
+        });
+
+        // Step 4 Back/Restart
+        document.getElementById('step4-back').addEventListener('click', () => goToStep(3));
+        document.getElementById('step4-restart').addEventListener('click', () => {
+            location.reload();
+        });
+
+        // Generate Commands
+        function generateCommands() {
+            // Docker command
+            const dockerCmd = `docker run -d \\
+  --name erc-gateway \\
+  -p 8080:8080 \\
+  -e UPSTREAM_API_KEY="${config.apiKey}" \\
+  -e UPSTREAM_URL="${config.upstreamUrl}" \\
+  -e ALLOWED_UPSTREAM_HOSTS="${config.allowedHosts}" \\
+  -e ERC_API_TOKEN="${config.apiToken}" \\
+  -v ./data:/home/erc/data \\
+  erc-gateway
+
+docker run -d \\
+  --name erc-query-api \\
+  -p 8082:8082 \\
+  -e ERC_API_TOKEN="${config.apiToken}" \\
+  -e ERC_CORS_ORIGIN="http://localhost:3000" \\
+  -v ./data:/home/erc/data \\
+  erc-query-api`;
+
+            document.getElementById('docker-command').innerHTML =
+                `<button class="copy-btn" data-target="docker-command">复制</button>${dockerCmd}`;
+
+            // Compose command
+            const composeCmd = `# 确保 .env 和 docker-compose.yml 在同一目录
+docker compose up -d
+
+# 查看运行状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f`;
+
+            document.getElementById('compose-command').innerHTML =
+                `<button class="copy-btn" data-target="compose-command">复制</button>${composeCmd}`;
+
+            // Bind copy buttons
+            bindCopyButtons();
+        }
+
+        // Tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelector(`.tab-content[data-tab="${tabName}"]`).classList.add('active');
+            });
+        });
+
+        // Copy functionality
+        function bindCopyButtons() {
+            document.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.dataset.target;
+                    const codeBlock = document.getElementById(targetId);
+                    const text = codeBlock.textContent.replace('复制', '').replace('已复制', '').trim();
+
+                    navigator.clipboard.writeText(text).then(() => {
+                        btn.textContent = '已复制';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.textContent = '复制';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    });
+                });
+            });
+        }
+
+        // Download .env
+        document.getElementById('download-env').addEventListener('click', () => {
+            const envContent = `# ===== 必填 =====
+UPSTREAM_API_KEY=${config.apiKey}
+ERC_API_TOKEN=${config.apiToken}
+ALLOWED_UPSTREAM_HOSTS=${config.allowedHosts}
+
+# ===== 可选 =====
+UPSTREAM_URL=${config.upstreamUrl}
+ERC_CORS_ORIGIN=http://localhost:3000
+GATEWAY_LISTEN=0.0.0.0:8080`;
+
+            downloadFile('.env', envContent);
+        });
+
+        // Download docker-compose.yml
+        document.getElementById('download-compose').addEventListener('click', () => {
+            const composeContent = `version: "3.8"
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/home/erc/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+  query-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.query-api
+    ports:
+      - "8082:8082"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/home/erc/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped`;
+
+            downloadFile('docker-compose.yml', composeContent);
+        });
+
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+    </script>
+</body>
+</html>

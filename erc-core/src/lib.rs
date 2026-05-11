@@ -59,7 +59,8 @@ fn generate_signed_receipt(
         custody,
     );
 
-    let canonical = receipt_obj.to_canonical_bytes();
+    let canonical = receipt_obj.to_canonical_bytes()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
     let sig = crypto::sign_and_clear(&canonical, secret_key)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
 
@@ -69,7 +70,8 @@ fn generate_signed_receipt(
         signature: hex::encode(&sig),
     });
 
-    let json_data = receipt_obj.to_json();
+    let json_data = receipt_obj.to_json()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
     Ok((json_data, hex::encode(sig)))
 }
 
@@ -97,7 +99,8 @@ fn verify_receipt_signature(
 
     let receipt: receipt::ExecutionReceipt = serde_json::from_str(json_data)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("JSON解析失败: {}", e)))?;
-    let canonical = receipt.to_canonical_bytes();
+    let canonical = receipt.to_canonical_bytes()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
 
     crypto::verify(&canonical, &sig_bytes, &pub_bytes)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))

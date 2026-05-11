@@ -1,7 +1,7 @@
 use axum::{
     Router,
     routing::post,
-    extract::{State, Json, ConnectInfo},
+    extract::{State, Json, ConnectInfo, DefaultBodyLimit},
     http::StatusCode,
 };
 use serde_json::Value;
@@ -9,6 +9,19 @@ use std::sync::Arc;
 use std::net::SocketAddr;
 use tokio::sync::Mutex;
 use axum::http::HeaderMap;
+
+/// 设置数据库文件权限为600（仅所有者可读写）
+#[cfg(unix)]
+fn set_db_permissions(path: &str) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_db_permissions(_path: &str) -> std::io::Result<()> {
+    // Windows系统暂不设置权限
+    Ok(())
+}
 
 mod proxy;
 mod recorder;
@@ -42,6 +55,12 @@ async fn main() {
             window_end INTEGER NOT NULL
         );"
     ).expect("无法创建限流表");
+    
+    // 设置数据库文件权限为600
+    if let Err(e) = set_db_permissions("erc_rate_limits.db") {
+        tracing::warn!("无法设置限流数据库文件权限: {}", e);
+    }
+    
     let rate_db = Arc::new(Mutex::new(rate_db));
 
     let recorder = Arc::new(Recorder::new(
@@ -59,13 +78,20 @@ async fn main() {
     let app = Router::new()
         .route("/v1/messages", post(proxy_handler))
         .route("/health", axum::routing::get(health_handler))
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024))  // 10MB限制
         .with_state(state);
 
     tracing::info!("🚀 ERC Gateway listening on {}", config.listen_addr);
-    let listener = tokio::net::TcpListener::bind(&config.listen_addr)
-        .await
-        .unwrap();
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+    let listener = match tokio::net::TcpListener::bind(&config.listen_addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!("无法绑定监听地址 {}: {}", config.listen_addr, e);
+            std::process::exit(1);
+        }
+    };
+    if let Err(e) = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await {
+        tracing::error!("服务器启动失败: {}", e);
+    }
 }
 
 async fn health_handler() -> &'static str {
@@ -83,47 +109,34 @@ async fn proxy_handler(
     let window_seconds: i64 = 3600;
     let now = chrono::Utc::now().timestamp();
 
-    // 从 SQLite 读取或初始化该 IP 的限流状态
+    // 使用原子操作进行限流检查和扣减，避免竞态条件
     let db = state.rate_db.lock().await;
-    let row = db.query_row(
-        "SELECT remaining, window_end FROM rate_limits WHERE ip = ?1",
-        [&ip],
-        |row| Ok((row.get::<_, u32>(0)?, row.get::<_, i64>(1)?)),
-    );
-
-    let remaining: u32;
-
-    match row {
-        Ok((rem, end)) => {
-            if now > end {
-                db.execute(
-                    "UPDATE rate_limits SET remaining = ?1, window_end = ?2 WHERE ip = ?3",
-                    rusqlite::params![max_calls_per_hour - 1, now + window_seconds, ip],
-                ).ok();
-                remaining = max_calls_per_hour;
-            } else {
-                remaining = rem;
-            }
-        }
-        Err(_) => {
-            db.execute(
-                "INSERT INTO rate_limits (ip, remaining, window_end) VALUES (?1, ?2, ?3)",
-                rusqlite::params![ip, max_calls_per_hour - 1, now + window_seconds],
-            ).ok();
-            remaining = max_calls_per_hour;
-        }
-    }
+    let remaining: u32 = db.query_row(
+        "INSERT INTO rate_limits (ip, remaining, window_end)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(ip) DO UPDATE SET
+             remaining = CASE
+                 WHEN window_end < ?4 THEN ?2 - 1
+                 WHEN remaining > 0 THEN remaining - 1
+                 ELSE 0
+             END,
+             window_end = CASE
+                 WHEN window_end < ?4 THEN ?3
+                 ELSE window_end
+             END
+         RETURNING remaining",
+        rusqlite::params![ip, max_calls_per_hour, now + window_seconds, now],
+        |row| row.get(0),
+    ).map_err(|e| {
+        tracing::error!("限流数据库操作失败: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     if remaining == 0 {
         drop(db);
         tracing::warn!("Rate limit exceeded for IP: {}", ip);
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
-
-    db.execute(
-        "UPDATE rate_limits SET remaining = remaining - 1 WHERE ip = ?1",
-        [&ip],
-    ).ok();
     drop(db);
 
     let api_key = std::env::var("UPSTREAM_API_KEY")
@@ -133,6 +146,12 @@ async fn proxy_handler(
         tracing::error!("No API Key configured. Set UPSTREAM_API_KEY or ANTHROPIC_API_KEY");
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
+
+    // 验证上游URL是否在白名单内
+    state.config.validate_upstream_url(&state.config.upstream_url).map_err(|e| {
+        tracing::error!("上游URL验证失败: {}", e);
+        StatusCode::FORBIDDEN
+    })?;
 
     let response = forward_to_upstream(
         &state.client,

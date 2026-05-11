@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use std::env;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 use axum::http::header;
 
 #[derive(Clone)]
@@ -22,7 +23,7 @@ struct AppState {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let db_path = "D:/erc-project/erc_buffer.db";
+    let db_path = "/home/erc/data/erc_buffer.db";
 
     // 强制要求设置 API Token，不允许默认值
     let api_token = env::var("ERC_API_TOKEN").unwrap_or_else(|_| {
@@ -47,13 +48,13 @@ async fn main() {
     let state = AppState { store, api_token };
 
     // 严格化 CORS：仅允许指定来源
+    let cors_origin = env::var("ERC_CORS_ORIGIN")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let allowed_origin = cors_origin
+        .parse::<axum::http::HeaderValue>()
+        .unwrap_or_else(|_| "http://localhost:3000".parse().unwrap());
     let cors = CorsLayer::new()
-        .allow_origin(tower_http::cors::AllowOrigin::exact(
-            env::var("ERC_CORS_ORIGIN")
-                .unwrap_or("http://localhost:3000".to_string())
-                .parse()
-                .unwrap(),
-        ))
+        .allow_origin(tower_http::cors::AllowOrigin::exact(allowed_origin))
         .allow_methods([axum::http::Method::GET])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]);
 
@@ -62,12 +63,21 @@ async fn main() {
         .route("/api/v1/receipts", get(get_receipt))
         .route("/api/v1/executions/events", get(get_events_by_execution))
         .route("/api/v1/traces/causality", get(get_events_by_trace))
+        .nest_service("/", ServeDir::new("public"))
         .layer(cors)
         .with_state(state);
 
-    tracing::info!("Listening on 127.0.0.1:8082");
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8082").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    tracing::info!("Listening on 0.0.0.0:8082");
+    let listener = match tokio::net::TcpListener::bind("0.0.0.0:8082").await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!("Failed to bind to port 8082: {}", e);
+            std::process::exit(1);
+        }
+    };
+    if let Err(e) = axum::serve(listener, app).await {
+        tracing::error!("Server error: {}", e);
+    }
 }
 
 async fn health() -> &'static str { "OK" }
